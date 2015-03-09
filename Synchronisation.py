@@ -103,7 +103,7 @@ class Synchronisation(object):
         presences_json = jsonpickle.encode(presences_array)
         print presences_json
 
-        url = self.API_ADRESS+"presences"
+        url = self.API_ADRESS+"presences/"
         print url
         request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
         response = urllib2.urlopen(request)

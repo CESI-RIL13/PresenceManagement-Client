@@ -25,31 +25,29 @@ class Synchronisation(object):
     def installBDD(self):
         self.curseur.execute('CREATE TABLE IF NOT EXISTS scheduling(id integer, date_start datetime, date_end datetime, promotion_id varchar, professor_id varchar, updated timestamp)')
         self.curseur.execute('CREATE TABLE IF NOT EXISTS user(id varchar, promotion_id varchar)')
-        self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime default current_timestamp)')
+        self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime default current_timestamp, uploaded integer default 0)')
         self.connexion.commit()
 
-    def cleanBDD(self):
-        # Suppression des schedueling dépassés
-        # Suppresision des utilisateurs qui ne sont pas dans les scheduling
-        return "cleanBDD"
+    def sendRequest(self,url,updated = False):
+        try :
+            request = urllib2.Request(url)
+            if updated :
+                self.curseur.execute('SELECT MAX(updated) FROM scheduling')
+                last_scheduling_updated = self.curseur.fetchone()
+                lsu = float(0)
+                if last_scheduling_updated != None and last_scheduling_updated[0] != None :
+                    lsu = last_scheduling_updated[0]
+                request.add_header('If-Modified-Since', datetime.datetime.fromtimestamp(lsu).strftime("%d %b %Y %H:%M:%S GMT"))
+            response = urllib2.urlopen(request)
+            return json.load(response)
+        except urllib2.HTTPError as e:
+            print e.getcode()
+            return None
 
     def requestSchedulings(self) :
-        mac = get_mac()
-
-        self.curseur.execute('SELECT MAX(updated) FROM scheduling')
-        last_scheduling_updated = self.curseur.fetchone()
-        lsu = float(0)
-        if last_scheduling_updated != None and last_scheduling_updated[0] != None :
-            lsu = last_scheduling_updated[0]
-
-        url = self.API_ADRESS+"schedulings"
-        request = urllib2.Request(url)
-        request.add_header('If-Modified-Since', datetime.datetime.fromtimestamp(lsu).strftime("%d %b %Y %H:%M:%S GMT"))
-        response = urllib2.urlopen(request)
-        schedulings = json.load(response)
-
+        url = self.API_ADRESS+"schedulings?raspberry_id="+get_mac()
+        schedulings = self.sendRequest(url,True)
         print schedulings
-
         return schedulings
 
     def requestUsers(self) :
@@ -62,13 +60,8 @@ class Synchronisation(object):
 
         if(len(promotion_ids) > 0) :
             url = self.API_ADRESS+"users?promotion_id="+",".join(promotion_ids)
-            print url
-            request = urllib2.Request(url)
-            response = urllib2.urlopen(request)
-            users = json.load(response)
-
+            users = self.sendRequest(url)
             print users
-
             return users
 
     def findAllSchedulingsId(self) :
@@ -89,7 +82,7 @@ class Synchronisation(object):
 
     def sentPresence(self) :
         # Envoie des présences sur l'URI : /presences
-        self.curseur.execute('SELECT * FROM presence')
+        self.curseur.execute('SELECT * FROM presence WHERE uploaded = 0')
         presences = self.curseur.fetchall()
 
         presences_array = []
@@ -100,17 +93,23 @@ class Synchronisation(object):
             tmp['date'] = presence[1]
             presences_array.append(tmp)
 
-        presences_json = jsonpickle.encode(presences_array)
-        print presences_json
+        if len(presences_array) != 0 :
+            presences_json = jsonpickle.encode(presences_array)
+            print presences_json
 
-        url = self.API_ADRESS+"presences/"
-        print url
-        request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
-        response = urllib2.urlopen(request)
+            try:
+                url = self.API_ADRESS+"presences/"
+                print url
+                request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
+                response = urllib2.urlopen(request)
+                self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
+                print response
+                print "Sent presence...OK"
 
-        print response
-
-        return "sentPresence"
+            except urllib2.HTTPError as e:
+                print e.getcode()
+                print "Sent presence...FAILED"
+                pass
 
     def checkUser(self, id) :
         self.connexion = sqlite3.connect('DB.sqlite3')
@@ -119,14 +118,14 @@ class Synchronisation(object):
 
         now = time.time()
 
-        # On vérifie le planning du créneau horraire et si l'utilisateur est dans cette promotion
-        self.curseur.execute("SELECT s.promotion_id, s.date_start, s.date_end FROM scheduling AS s INNER JOIN user AS u ON u.id = '"+id+"' AND u.promotion_id = s.promotion_id WHERE s.date_start < "+str(now)+" AND s.date_end > "+str(now))
+        # On vérifie le planning du créneau horraire et si l'utilisateur est dans cette promotion (tenter un join)
+        self.curseur.execute("SELECT s.date_start, s.date_end FROM scheduling AS s INNER JOIN user AS u ON u.id = '"+id+"' AND ( u.promotion_id = s.promotion_id OR u.id = s.professor_id ) WHERE s.date_start < "+str(now)+" AND s.date_end > "+str(now))
         scheduling = self.curseur.fetchone()
 
         if (scheduling != None) :
             print "User found..."
             # On recherche si l'utilisateur a déjà enregistré sa présence
-            self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+datetime.datetime.fromtimestamp(scheduling[1]).strftime("%Y-%m-%d %H:%M:%S")+"' AND '"+datetime.datetime.fromtimestamp(scheduling[2]).strftime("%Y-%m-%d %H:%M:%S")+"'")
+            self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+datetime.datetime.fromtimestamp(scheduling[0]).strftime("%Y-%m-%d %H:%M:%S")+"' AND '"+datetime.datetime.fromtimestamp(scheduling[1]).strftime("%Y-%m-%d %H:%M:%S")+"'")
             presence = self.curseur.fetchone()
 
             if (presence != None):
@@ -142,6 +141,18 @@ class Synchronisation(object):
         print "User's authentification...FAILED"
         self.connexion.close()
         return 0
+
+    def cleanBDD(self):
+        # Suppressions des présences uploadés et qui ne sont plus dans les créneaux horraires des schedulings
+        self.curseur.execute("DELETE FROM presence AS p INNER JOIN scheduling AS s ON p.date NOT BETWEEN s.date_start AND s.date_end WHERE p.uploaded = 1")
+
+        # Suppressions des schedulings dépassés
+        self.curseur.execute("DELETE FROM scheduling WHERE date_end < "+time.time())
+
+        # Suppressions des utilisateurs qui ne sont plus dans les créneaux horraires
+        self.curseur("DELETE FROM user AS u INNER JOIN scheduling AS s ON u.promotion_id <> s.promotion.id AND u.id <> s.professor_id")
+
+        print "Clean Database...OK"
 
     def routine(self):
         i = j = 0
@@ -161,14 +172,13 @@ class Synchronisation(object):
         for scheduling in schedulings:
             if scheduling['id'] in check_schedulings_id :
                 i += 1
-                self.curseur.execute ("UPDATE scheduling SET date_start = "+str(scheduling['date_start'])+", date_end = "+str(scheduling['date_end'])+", promotion_id = '"+scheduling['promotion_id']+"', professor_id = '"+scheduling['user_id']+"', updated = "+str(scheduling['updated'])+" WHERE id = "+str(scheduling['id']))
+                self.curseur.execute ("UPDATE scheduling SET date_start = "+str(scheduling['date_start']-self.DELAY)+", date_end = "+str(scheduling['date_end'])+", promotion_id = '"+scheduling['promotion_id']+"', professor_id = '"+scheduling['user_id']+"', updated = "+str(scheduling['updated'])+" WHERE id = "+str(scheduling['id']))
             else :
                 i += 1
-                new_schedulings.append("("+str(scheduling['id'])+","+str(scheduling['date_start'])+","+str(scheduling['date_end'])+",'"+scheduling['promotion_id']+"','"+scheduling['user_id']+"',"+str(scheduling['updated'])+")")
+                new_schedulings.append("("+str(scheduling['id'])+","+str(scheduling['date_start']-self.DELAY)+","+str(scheduling['date_end'])+",'"+scheduling['promotion_id']+"','"+scheduling['user_id']+"',"+str(scheduling['updated'])+")")
 
         if len(new_schedulings) > 0 :
             self.curseur.execute("INSERT INTO scheduling ('id','date_start','date_end','promotion_id','professor_id','updated') VALUES "+", ".join(new_schedulings))
-
         print "Requesting schedulings...OK"
 
         # S'il y a du neuf dans les plannings, on récupère une liste des utilisateurs sur l'URI : /users?proffesor_ids={ids}&promo_ids={ids}
@@ -193,15 +203,12 @@ class Synchronisation(object):
                 self.curseur.execute("INSERT INTO user ('id','promotion_id') VALUES "+", ".join(new_users))
             if j > 0 :
                 self.connexion.commit()
-
             print "Requesting users...OK"
 
         # Envoi des présences
         self.sentPresence()
-        print "Sent presence...OK"
 
         # Suppression des données dépassés
         self.cleanBDD()
-        print "Clean Database...OK"
 
         self.connexion.close()

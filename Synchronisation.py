@@ -47,7 +47,8 @@ class Synchronisation(object):
             return None
 
     def requestSchedulings(self) :
-        url = self.API_ADRESS+"schedulings?raspberry_id="+str(get_mac())
+
+        url = self.API_ADRESS+"schedulings?raspberry_id="+str(hex(get_mac()))
         schedulings = self.sendRequest(url,True)
         return schedulings
 

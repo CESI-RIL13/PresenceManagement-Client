@@ -7,4 +7,4 @@ import Synchronisation
 synchro = Synchronisation.Synchronisation()
 
 #synchro.routine()
-synchro.checkUser("1234567890")
+synchro.checkUser("12345")

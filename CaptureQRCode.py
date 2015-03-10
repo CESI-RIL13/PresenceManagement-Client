@@ -1,3 +1,4 @@
+#! /usr/bin/python2.7
 import zbar
 import time
 import wiringpi2 as wpi
@@ -42,6 +43,7 @@ camera = picamera.PiCamera()
 camera.resolution = (320,240)
 synchro = Synchronisation.Synchronisation()
 initialisationGpio()
+timeSynchro = 0
 
 while True :
 	#os.system("fswebcam -r 320x240 -S 3 --jpeg 50 --quiet --no-banner --save QR.jpg")
@@ -56,6 +58,7 @@ while True :
 	raw = pil.tostring()
 	myStream = zbar.Image(width,height,'Y800',raw)
 	nb = scanner.scan(myStream)
+	timeSynchro += 1
 	#print 'nb: ' + str(nb)
 	if nb>0 :
 		for symbol in myStream :
@@ -79,5 +82,11 @@ while True :
 		GPIO.output(13,True)
 		sleep(2)
 		GPIO.output(13,False)
+		
+	if timeSynchro == 50 :
+		synchro.routine()
+		print 'Synchronisation ready...'
+		timeSynchro = 0
+		
 	gc.collect()
 	#time.sleep(0.5)

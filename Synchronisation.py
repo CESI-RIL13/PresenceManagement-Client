@@ -19,13 +19,12 @@ class Synchronisation(object):
 
         self.routine()
 
-        print "Synchronisation ready..."
         self.connexion.close()
 
     def installBDD(self):
         self.curseur.execute('CREATE TABLE IF NOT EXISTS scheduling(id integer, date_start datetime, date_end datetime, promotion_id varchar, professor_id varchar, updated timestamp)')
         self.curseur.execute('CREATE TABLE IF NOT EXISTS user(id varchar, promotion_id varchar)')
-        self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime default current_timestamp, uploaded integer default 0)')
+        self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime, uploaded integer default 0)')
         self.connexion.commit()
 
     def sendRequest(self,url,updated = False):
@@ -41,13 +40,15 @@ class Synchronisation(object):
             response = urllib2.urlopen(request)
             return json.load(response)
         except urllib2.HTTPError as e:
-            print e.getcode()
+            if e.getcode() == 404 :
+                print "ALREADY UP TO DATE"
+            else :
+                print "ERREUR "+str(e.getcode())
             return None
 
     def requestSchedulings(self) :
-        url = self.API_ADRESS+"schedulings?raspberry_id="+get_mac()
+        url = self.API_ADRESS+"schedulings?raspberry_id="+str(get_mac())
         schedulings = self.sendRequest(url,True)
-        print schedulings
         return schedulings
 
     def requestUsers(self) :
@@ -61,7 +62,6 @@ class Synchronisation(object):
         if(len(promotion_ids) > 0) :
             url = self.API_ADRESS+"users?promotion_id="+",".join(promotion_ids)
             users = self.sendRequest(url)
-            print users
             return users
 
     def findAllSchedulingsId(self) :
@@ -107,7 +107,7 @@ class Synchronisation(object):
                 print "Sent presence...OK"
 
             except urllib2.HTTPError as e:
-                print e.getcode()
+                print "ERREUR..."+str(e.getcode())
                 print "Sent presence...FAILED"
                 pass
 
@@ -125,14 +125,14 @@ class Synchronisation(object):
         if (scheduling != None) :
             print "User found..."
             # On recherche si l'utilisateur a déjà enregistré sa présence
-            self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+datetime.datetime.fromtimestamp(scheduling[0]).strftime("%Y-%m-%d %H:%M:%S")+"' AND '"+datetime.datetime.fromtimestamp(scheduling[1]).strftime("%Y-%m-%d %H:%M:%S")+"'")
+            self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+str(scheduling[0])+"' AND '"+str(scheduling[1])+"'")
             presence = self.curseur.fetchone()
 
             if (presence != None):
                 print "User already recorded..."
                 return 2
             else :
-                self.curseur.execute("INSERT INTO presence (user_id) VALUES ('"+id+"')")
+                self.curseur.execute("INSERT INTO presence (user_id, date) VALUES ('"+id+"', "+str(now)+")")
                 self.connexion.commit()
                 self.connexion.close()
                 print "User's authentification...OK"
@@ -143,14 +143,18 @@ class Synchronisation(object):
         return 0
 
     def cleanBDD(self):
+        now = str(time.time())
+        nowless1day = str(time.time()-86400)
+
         # Suppressions des présences uploadés et qui ne sont plus dans les créneaux horraires des schedulings
-        self.curseur.execute("DELETE FROM presence AS p INNER JOIN scheduling AS s ON p.date NOT BETWEEN s.date_start AND s.date_end WHERE p.uploaded = 1")
+        self.curseur.execute("DELETE FROM presence WHERE uploaded = 1 AND date < "+nowless1day)
 
         # Suppressions des schedulings dépassés
-        self.curseur.execute("DELETE FROM scheduling WHERE date_end < "+time.time())
+        self.curseur.execute("DELETE FROM scheduling WHERE date_end < "+nowless1day)
 
         # Suppressions des utilisateurs qui ne sont plus dans les créneaux horraires
-        self.curseur("DELETE FROM user AS u INNER JOIN scheduling AS s ON u.promotion_id <> s.promotion.id AND u.id <> s.professor_id")
+        #self.curseur("DELETE FROM user AS u INNER JOIN scheduling AS s ON u.promotion_id <> s.promotion.id AND u.id <> s.professor_id")
+        self.curseur.execute("DELETE FROM user WHERE promotion_id NOT IN (SELECT promotion_id FROM scheduling WHERE date_end > "+now+") OR id IN (SELECT professor_id FROM scheduling WHERE date_end > "+now+")")
 
         print "Clean Database...OK"
 
@@ -160,50 +164,52 @@ class Synchronisation(object):
         new_users = []
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        print "Synchronisation's routine starting..."
+        print "Synchronisation's routine...STARTING"
 
         # Demande des derniers plannings sur l'URI : /schedulings?room={mac_adress}&updated={last_updated}
         schedulings = self.requestSchedulings()
 
-        # Récupération des plannings existants
-        check_schedulings_id = self.findAllSchedulingsId()
+        if schedulings != None :
+            # Récupération des plannings existants
+            check_schedulings_id = self.findAllSchedulingsId()
 
-        # Enregistrement et maj des plannings
-        for scheduling in schedulings:
-            if scheduling['id'] in check_schedulings_id :
-                i += 1
-                self.curseur.execute ("UPDATE scheduling SET date_start = "+str(scheduling['date_start']-self.DELAY)+", date_end = "+str(scheduling['date_end'])+", promotion_id = '"+scheduling['promotion_id']+"', professor_id = '"+scheduling['user_id']+"', updated = "+str(scheduling['updated'])+" WHERE id = "+str(scheduling['id']))
-            else :
-                i += 1
-                new_schedulings.append("("+str(scheduling['id'])+","+str(scheduling['date_start']-self.DELAY)+","+str(scheduling['date_end'])+",'"+scheduling['promotion_id']+"','"+scheduling['user_id']+"',"+str(scheduling['updated'])+")")
-
-        if len(new_schedulings) > 0 :
-            self.curseur.execute("INSERT INTO scheduling ('id','date_start','date_end','promotion_id','professor_id','updated') VALUES "+", ".join(new_schedulings))
-        print "Requesting schedulings...OK"
-
-        # S'il y a du neuf dans les plannings, on récupère une liste des utilisateurs sur l'URI : /users?proffesor_ids={ids}&promo_ids={ids}
-        if i > 0 :
-            self.connexion.commit()
-
-            # Récupération des utilisateurs existants
-            check_users_id = self.findAllUsersId()
-
-            # Demande les utilisateurs concernés par les plannings
-            users = self.requestUsers()
-
-            # Enregistrement et maj des utilisateurs
-            for user in users:
-                if user['id'] in check_users_id :
-                    j += 1
-                    self.curseur.execute ("UPDATE user SET promotion_id = '"+user['promotion_id']+"' WHERE id = '"+user['id']+"'")
+            # Enregistrement et maj des plannings
+            for scheduling in schedulings:
+                if scheduling['id'] in check_schedulings_id :
+                    i += 1
+                    self.curseur.execute ("UPDATE scheduling SET date_start = "+str(scheduling['date_start']-self.DELAY)+", date_end = "+str(scheduling['date_end'])+", promotion_id = '"+scheduling['promotion_id']+"', professor_id = '"+scheduling['user_id']+"', updated = "+str(scheduling['updated'])+" WHERE id = "+str(scheduling['id']))
                 else :
-                    j += 1
-                    new_users.append("('"+user['id']+"','"+user['promotion_id']+"')")
-            if len(new_users) > 0 :
-                self.curseur.execute("INSERT INTO user ('id','promotion_id') VALUES "+", ".join(new_users))
-            if j > 0 :
+                    i += 1
+                    new_schedulings.append("("+str(scheduling['id'])+","+str(scheduling['date_start']-self.DELAY)+","+str(scheduling['date_end'])+",'"+scheduling['promotion_id']+"','"+scheduling['user_id']+"',"+str(scheduling['updated'])+")")
+
+            if len(new_schedulings) > 0 :
+                self.curseur.execute("INSERT INTO scheduling ('id','date_start','date_end','promotion_id','professor_id','updated') VALUES "+", ".join(new_schedulings))
+            print "Requesting schedulings...OK"
+
+            # S'il y a du neuf dans les plannings, on récupère une liste des utilisateurs sur l'URI : /users?proffesor_ids={ids}&promo_ids={ids}
+            if i > 0 :
                 self.connexion.commit()
-            print "Requesting users...OK"
+
+                # Récupération des utilisateurs existants
+                check_users_id = self.findAllUsersId()
+
+                # Demande les utilisateurs concernés par les plannings
+                users = self.requestUsers()
+
+                if users != None :
+                    # Enregistrement et maj des utilisateurs
+                    for user in users:
+                        if user['id'] in check_users_id :
+                            j += 1
+                            self.curseur.execute ("UPDATE user SET promotion_id = '"+user['promotion_id']+"' WHERE id = '"+user['id']+"'")
+                        else :
+                            j += 1
+                            new_users.append("('"+user['id']+"','"+user['promotion_id']+"')")
+                    if len(new_users) > 0 :
+                        self.curseur.execute("INSERT INTO user ('id','promotion_id') VALUES "+", ".join(new_users))
+                    if j > 0 :
+                        self.connexion.commit()
+                    print "Requesting users...OK"
 
         # Envoi des présences
         self.sentPresence()
@@ -212,3 +218,5 @@ class Synchronisation(object):
         self.cleanBDD()
 
         self.connexion.close()
+        print "Synchronisation's routine...DONE"
+

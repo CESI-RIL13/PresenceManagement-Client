@@ -8,7 +8,7 @@ class Synchronisation(object):
     def __init__(self):
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        self.API_ADRESS = "http://10.133.129.38:5000/"
+        self.API_ADRESS = "http://192.168.43.219:5000/"
         self.DELAY =  900
 
         # Initialisation de la BDD
@@ -219,6 +219,6 @@ class Synchronisation(object):
         # Suppression des données dépassés
         self.cleanBDD()
 
+        self.connexion.close()
         print "Synchronisation's routine...DONE"
 
-        self.connexion.close()

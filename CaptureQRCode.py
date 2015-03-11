@@ -28,6 +28,19 @@ def demo() :
 	GPIO.output(13,False)
 	GPIO.output(11,False)
 	
+def buzzerOK() :
+	for i in range (20) :
+		GPIO.output(12,GPIO.LOW)
+		sleep(0.01)
+		GPIO.output(12,GPIO.HIGH)
+		sleep(0.01)
+		
+def buzzerKO() :
+	for i in range (5) :
+		GPIO.output(12,GPIO.LOW)
+		sleep(0.02)
+		GPIO.output(12,GPIO.HIGH)
+		sleep(0.02)
 
 def initialisationGpio() :
 	GPIO.setmode(GPIO.BOARD)
@@ -35,9 +48,10 @@ def initialisationGpio() :
 	GPIO.setup(7,GPIO.OUT)
 	GPIO.setup(11,GPIO.OUT)
 	GPIO.setup(13,GPIO.OUT)
+	GPIO.setup(12,GPIO.OUT)
 	
 	demo()
-
+	buzzerOK()
 
 camera = picamera.PiCamera()
 camera.resolution = (320,240)
@@ -70,17 +84,22 @@ while True :
 	if result == 1 :
 		#allumer la diode verte
 		GPIO.output(7,True)
-		sleep(2)
+		buzzerOK()
+		sleep(1)
 		GPIO.output(7,False)
 	if result == 0 :
 		#allumer la diode rouge
 		GPIO.output(11,True)
-		sleep(2)
+		buzzerKO()
+		sleep(.1)
+		buzzerKO()
+		sleep(1)
 		GPIO.output(11,False)
 	if result == 2 :
 		#allumer la diode jaune
 		GPIO.output(13,True)
-		sleep(2)
+		buzzerKO()
+		sleep(1.5)
 		GPIO.output(13,False)
 		
 	if timeSynchro == 50 :

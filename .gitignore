@@ -21,5 +21,6 @@ $ git status
 [...]
 # Untracked files:
 [...]
-#       Documentation/foo.html
+# Documentation/foo.html
 [...]
+test.py

@@ -22,7 +22,7 @@ class Synchronisation(object):
 
     def installBDD(self):
         self.curseur.execute('CREATE TABLE IF NOT EXISTS scheduling(id integer, date_start datetime, date_end datetime, promotion_id varchar, professor_id varchar, updated timestamp)')
-        self.curseur.execute('CREATE TABLE IF NOT EXISTS user(id varchar, promotion_id varchar)')
+        self.curseur.execute('CREATE TABLE IF NOT EXISTS user(id varchar, promotion_id varchar null)')
         self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime, uploaded integer default 0)')
         self.connexion.commit()
 
@@ -51,11 +51,16 @@ class Synchronisation(object):
 
         url = self.API_ADRESS+"schedulings?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
+
+        print schedulings
         return schedulings
 
     def requestUsers(self) :
         # Récupération des promo_ids
         promotion_ids = []
+        professor_ids = []
+        users1 = []
+        users2 = []
         self.curseur.execute('SELECT promotion_id FROM scheduling GROUP BY promotion_id')
         all_promotion_id = self.curseur.fetchall()
         for promotion_id in all_promotion_id :
@@ -63,8 +68,19 @@ class Synchronisation(object):
 
         if(len(promotion_ids) > 0) :
             url = self.API_ADRESS+"users?promotion_id="+",".join(promotion_ids)
-            users = self.sendRequest(url)
-            return users
+            users1 = self.sendRequest(url)
+
+        self.curseur.execute('SELECT professor_id FROM scheduling GROUP BY professor_id')
+        all_professor_id = self.curseur.fetchall()
+        for professor_id in all_professor_id :
+            professor_ids.append(professor_id[0])
+
+        if(len(professor_ids) > 0) :
+            url = self.API_ADRESS+"users?id="+",".join(professor_ids)
+            users2 = self.sendRequest(url)
+
+        print users1 + users2
+        return users1 + users2
 
     def findAllSchedulingsId(self) :
         check_schedulings_id = []
@@ -101,7 +117,6 @@ class Synchronisation(object):
 
             try:
                 url = self.API_ADRESS+"presences/"
-                print url
                 request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
                 response = urllib2.urlopen(request)
                 self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
@@ -204,10 +219,10 @@ class Synchronisation(object):
                     for user in users:
                         if user['id'] in check_users_id :
                             j += 1
-                            self.curseur.execute ("UPDATE user SET promotion_id = '"+user['promotion_id']+"' WHERE id = '"+user['id']+"'")
+                            self.curseur.execute ("UPDATE user SET promotion_id = '"+('null', user['promotion_id'])[user['promotion_id'] != None]+"' WHERE id = '"+user['id']+"'")
                         else :
                             j += 1
-                            new_users.append("('"+user['id']+"','"+user['promotion_id']+"')")
+                            new_users.append("('"+user['id']+"','"+('null', user['promotion_id'])[user['promotion_id'] != None]+"')")
                     if len(new_users) > 0 :
                         self.curseur.execute("INSERT INTO user ('id','promotion_id') VALUES "+", ".join(new_users))
                     if j > 0 :

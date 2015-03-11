@@ -29,18 +29,18 @@ def demo() :
 	GPIO.output(11,False)
 	
 def buzzerOK() :
-	for i in range (20) :
+	for i in range (60) :
 		GPIO.output(12,GPIO.LOW)
-		sleep(0.01)
+		sleep(0.0068)
 		GPIO.output(12,GPIO.HIGH)
-		sleep(0.01)
+		sleep(0.0068)
 		
 def buzzerKO() :
-	for i in range (5) :
+	for i in range (15) :
 		GPIO.output(12,GPIO.LOW)
-		sleep(0.02)
+		sleep(0.009)
 		GPIO.output(12,GPIO.HIGH)
-		sleep(0.02)
+		sleep(0.009)
 
 def initialisationGpio() :
 	GPIO.setmode(GPIO.BOARD)

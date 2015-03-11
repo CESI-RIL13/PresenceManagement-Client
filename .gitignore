@@ -24,3 +24,4 @@ $ git status
 # Documentation/foo.html
 [...]
 test.py
+DB.sqlite3

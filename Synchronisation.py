@@ -121,7 +121,7 @@ class Synchronisation(object):
                 response = urllib2.urlopen(request)
                 self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
                 self.connexion.commit()
-                print response
+                print response.read()
                 print "Sent presence...OK"
 
             except urllib2.HTTPError as e:

@@ -2,8 +2,7 @@
 # -*-  coding: utf-8 -*-
 __author__ = 'ovnislash'
 
-import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time
-from uuid import getnode as get_mac
+import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time, uuid
 
 class Synchronisation(object):
     def __init__(self):
@@ -48,7 +47,9 @@ class Synchronisation(object):
 
     def requestSchedulings(self) :
 
-        url = self.API_ADRESS+"schedulings?raspberry_id="+str(hex(get_mac()))
+        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+
+        url = self.API_ADRESS+"schedulings?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
         return schedulings
 

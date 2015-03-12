@@ -53,8 +53,6 @@ def initialisationGpio() :
 	demo()
 	buzzerOK()
 
-camera = picamera.PiCamera()
-camera.resolution = (320,240)
 synchro = Synchronisation.Synchronisation()
 initialisationGpio()
 timeSynchro = 0
@@ -63,6 +61,8 @@ while True :
 	#os.system("fswebcam -r 320x240 -S 3 --jpeg 50 --quiet --no-banner --save QR.jpg")
 	result = ""
 	wpi.wiringPiSetup()
+	camera = picamera.PiCamera()
+	camera.resolution = (320,240)
 	camera.capture('QR.jpg')
 	scanner = zbar.ImageScanner()
 	scanner.parse_config('enable')
@@ -70,6 +70,7 @@ while True :
 	#print 'size: ' + str(pil.size)
 	width, height = pil.size
 	raw = pil.tostring()
+	camera.close()
 	myStream = zbar.Image(width,height,'Y800',raw)
 	nb = scanner.scan(myStream)
 	timeSynchro += 1

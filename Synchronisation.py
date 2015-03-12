@@ -44,6 +44,8 @@ class Synchronisation(object):
             else :
                 print "ERREUR "+str(e.getcode())
             return None
+        except urllib2.URLError as e:
+			print "CONNECTION SERVER IMPOSSIBLE"
 
     def requestSchedulings(self) :
 

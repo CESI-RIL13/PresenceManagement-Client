@@ -67,20 +67,20 @@ while True :
 	scanner = zbar.ImageScanner()
 	scanner.parse_config('enable')
 	pil = Image.open('QR.jpg').convert('L')
-	#print 'size: ' + str(pil.size)
+	#print ('size: ') + str(pil.size)
 	width, height = pil.size
 	raw = pil.tostring()
 	camera.close()
 	myStream = zbar.Image(width,height,'Y800',raw)
 	nb = scanner.scan(myStream)
 	timeSynchro += 1
-	#print 'nb: ' + str(nb)
+	#print ('nb: ') + str(nb)
 	if nb>0 :
 		for symbol in myStream :
 			if symbol.data != "" or symbol.data != None :
-				print symbol.data
+				print ('')symbol.data
 				result = synchro.checkUser(symbol.data)
-				print 'result: ' + str(result)
+				print ('result: ') + str(result)
 	
 	if result == 1 :
 		#allumer la diode verte
@@ -105,7 +105,7 @@ while True :
 		
 	if timeSynchro == 50 :
 		synchro.routine()
-		print 'Synchronisation ready...'
+		print ('Synchronisation ready...')
 		timeSynchro = 0
 		
 	gc.collect()

@@ -78,7 +78,7 @@ while True :
 	if nb>0 :
 		for symbol in myStream :
 			if symbol.data != "" or symbol.data != None :
-				print ('')symbol.data
+				print ('') + symbol.data
 				result = synchro.checkUser(symbol.data)
 				print ('result: ') + str(result)
 	

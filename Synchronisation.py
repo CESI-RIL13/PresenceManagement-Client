@@ -143,7 +143,7 @@ class Synchronisation(object):
         scheduling = self.curseur.fetchone()
 
         if (scheduling != None) :
-            print "User found..."
+            print ("User found...")
             # On recherche si l'utilisateur a déjà enregistré sa présence
             self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+str(scheduling[0])+"' AND '"+str(scheduling[1])+"'")
             presence = self.curseur.fetchone()

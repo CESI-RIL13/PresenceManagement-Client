@@ -48,8 +48,10 @@ class Synchronisation(object):
             elif e.getcode() == 401 :
                 print "You're not authorized"
             else :
-                print "ERREUR "+str(e.getcode())
+                print ("ERREUR ")+str(e.getcode())
             return None
+        except urllib2.URLError as e:
+			print ("CONNECTION SERVER IMPOSSIBLE")
 
     def requestSchedulings(self) :
 
@@ -58,7 +60,7 @@ class Synchronisation(object):
         url = self.API_ADRESS+"schedulings?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
 
-        print schedulings
+        print ("") + schedulings
         return schedulings
 
     def requestUsers(self) :
@@ -85,7 +87,7 @@ class Synchronisation(object):
             url = self.API_ADRESS+"users?id="+",".join(professor_ids)
             users2 = self.sendRequest(url)
 
-        print users1 + users2
+        print ("") + users1 + users2
         return users1 + users2
 
     def findAllSchedulingsId(self) :
@@ -119,7 +121,7 @@ class Synchronisation(object):
 
         if len(presences_array) != 0 :
             presences_json = jsonpickle.encode(presences_array)
-            print presences_json
+            print ("") + presences_json
 
             try:
                 url = self.API_ADRESS+"presences/"
@@ -128,18 +130,18 @@ class Synchronisation(object):
                 response = urllib2.urlopen(request)
                 self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
                 self.connexion.commit()
-                print response.read()
-                print "Sent presence...OK"
+                print ("") + response.read()
+                print ("") + "Sent presence...OK"
 
             except urllib2.HTTPError as e:
-                print "ERREUR..."+str(e.getcode())
-                print "Sent presence...FAILED"
+                print ("ERREUR...")+str(e.getcode())
+                print ("Sent presence...FAILED")
                 pass
 
     def checkUser(self, id) :
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        print "User authentification's starting..."
+        print ("User authentification's starting...")
 
         now = time.time()
 
@@ -148,22 +150,22 @@ class Synchronisation(object):
         scheduling = self.curseur.fetchone()
 
         if (scheduling != None) :
-            print "User found..."
+            print ("User found...")
             # On recherche si l'utilisateur a déjà enregistré sa présence
             self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+str(scheduling[0])+"' AND '"+str(scheduling[1])+"'")
             presence = self.curseur.fetchone()
 
             if (presence != None):
-                print "User already recorded..."
+                print ("User already recorded...")
                 return 2
             else :
                 self.curseur.execute("INSERT INTO presence (user_id, date) VALUES ('"+id+"', "+str(now)+")")
                 self.connexion.commit()
                 self.connexion.close()
-                print "User's authentification...OK"
+                print ("User's authentification...OK")
                 return 1
 
-        print "User's authentification...FAILED"
+        print ("User's authentification...FAILED")
         self.connexion.close()
         return 0
 
@@ -181,7 +183,7 @@ class Synchronisation(object):
         #self.curseur("DELETE FROM user AS u INNER JOIN scheduling AS s ON u.promotion_id <> s.promotion.id AND u.id <> s.professor_id")
         self.curseur.execute("DELETE FROM user WHERE promotion_id NOT IN (SELECT promotion_id FROM scheduling WHERE date_end > "+now+") OR id IN (SELECT professor_id FROM scheduling WHERE date_end > "+now+")")
 
-        print "Clean Database...OK"
+        print ("Clean Database...OK")
 
     def routine(self):
         i = j = 0
@@ -189,7 +191,7 @@ class Synchronisation(object):
         new_users = []
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        print "Synchronisation's routine...STARTING"
+        print ("Synchronisation's routine...STARTING")
 
         # Demande des derniers plannings sur l'URI : /schedulings?room={mac_adress}&updated={last_updated}
         schedulings = self.requestSchedulings()
@@ -209,7 +211,7 @@ class Synchronisation(object):
 
             if len(new_schedulings) > 0 :
                 self.curseur.execute("INSERT INTO scheduling ('id','date_start','date_end','promotion_id','professor_id','updated') VALUES "+", ".join(new_schedulings))
-            print "Requesting schedulings...OK"
+            print ("Requesting schedulings...OK")
 
             # S'il y a du neuf dans les plannings, on récupère une liste des utilisateurs sur l'URI : /users?proffesor_ids={ids}&promo_ids={ids}
             if i > 0 :
@@ -234,7 +236,7 @@ class Synchronisation(object):
                         self.curseur.execute("INSERT INTO user ('id','promotion_id') VALUES "+", ".join(new_users))
                     if j > 0 :
                         self.connexion.commit()
-                    print "Requesting users...OK"
+                    print ("Requesting users...OK")
 
         # Envoi des présences
         self.sentPresence()
@@ -243,5 +245,5 @@ class Synchronisation(object):
         self.cleanBDD()
 
         self.connexion.close()
-        print "Synchronisation's routine...DONE"
+        print ("Synchronisation's routine...DONE")
 

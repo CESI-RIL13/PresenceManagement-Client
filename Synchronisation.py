@@ -26,6 +26,9 @@ class Synchronisation(object):
         self.curseur.execute('CREATE TABLE IF NOT EXISTS presence(user_id varchar, date datetime, uploaded integer default 0)')
         self.connexion.commit()
 
+    def getMac(self):
+        return ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+
     def sendRequest(self,url,updated = False):
         try :
             request = urllib2.Request(url)
@@ -36,18 +39,21 @@ class Synchronisation(object):
                 if last_scheduling_updated != None and last_scheduling_updated[0] != None :
                     lsu = last_scheduling_updated[0]
                 request.add_header('If-Modified-Since', datetime.datetime.fromtimestamp(lsu).strftime("%d %b %Y %H:%M:%S GMT"))
+                request.add_header('X-API-Client-Auth', self.getMac())
             response = urllib2.urlopen(request)
             return json.load(response)
         except urllib2.HTTPError as e:
             if e.getcode() == 404 :
                 print "ALREADY UP TO DATE"
+            elif e.getcode() == 401 :
+                print "You're not authorized"
             else :
                 print "ERREUR "+str(e.getcode())
             return None
 
     def requestSchedulings(self) :
 
-        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+        mac = self.getMac()
 
         url = self.API_ADRESS+"schedulings?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
@@ -118,6 +124,7 @@ class Synchronisation(object):
             try:
                 url = self.API_ADRESS+"presences/"
                 request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
+                request.add_header('X-API-Client-Auth', self.getMac())
                 response = urllib2.urlopen(request)
                 self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
                 self.connexion.commit()

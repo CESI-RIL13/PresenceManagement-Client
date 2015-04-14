@@ -2,13 +2,17 @@
 # -*-  coding: utf-8 -*-
 __author__ = 'ovnislash'
 
-import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time, uuid
+import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time, uuid, ConfigParser
 
 class Synchronisation(object):
     def __init__(self):
+        cfg = ConfigParser.ConfigParser()
+        cfg.read('conf.ini')
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        self.API_ADRESS = "http://192.168.43.219:5000/"
+        self.API_ADRESS = 'http://'+ cfg.get('Server','hostIP') + ':' + cfg.get('Server', 'port') + '/'
+        print self.API_ADRESS
+        #self.API_ADRESS = "http://192.168.43.219:5000/"
         self.DELAY =  900
 
         # Initialisation de la BDD

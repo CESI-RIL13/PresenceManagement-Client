@@ -10,8 +10,8 @@ class Synchronisation(object):
         cfg.read('conf.ini')
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        self.API_ADRESS = 'http://'+ cfg.get('Server','hostIP') + ':' + cfg.get('Server', 'port') + '/'
-        #self.API_ADRESS = "http://192.168.43.219:5000/"
+        #self.API_ADRESS = 'http://'+ cfg.get('Server','hostIP') + ':' + cfg.get('Server', 'port') + '/'
+        self.API_ADRESS = "http://localhost:5000/"
         self.DELAY =  900
 
         # Initialisation de la BDD
@@ -65,7 +65,7 @@ class Synchronisation(object):
 
         mac = self.getMac()
 
-        url = self.API_ADRESS+"schedulings?raspberry_id="+mac
+        url = self.API_ADRESS+"schedulings/?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
 
         return schedulings
@@ -91,7 +91,7 @@ class Synchronisation(object):
             professor_ids.append(professor_id[0])
 
         if(len(professor_ids) > 0) :
-            url = self.API_ADRESS+"users?id="+",".join(professor_ids)
+            url = self.API_ADRESS+"users/?id="+",".join(professor_ids)
             users2 = self.sendRequest(url)
 
         return users1 + users2

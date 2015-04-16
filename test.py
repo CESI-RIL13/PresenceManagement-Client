@@ -7,3 +7,5 @@ import Synchronisation
 synchro = Synchronisation.Synchronisation()
 
 synchro.checkUser("befg")
+synchro.checkUser("1234567890")
+synchro.checkUser("1234567893")

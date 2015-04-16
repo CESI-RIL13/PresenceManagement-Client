@@ -8,7 +8,7 @@ class Synchronisation(object):
     def __init__(self):
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        self.API_ADRESS = "http://192.168.43.219:5000/"
+        self.API_ADRESS = "http://localhost:5000/"
         self.DELAY =  900
 
         # Initialisation de la BDD
@@ -32,21 +32,26 @@ class Synchronisation(object):
     def sendRequest(self,url,updated = False):
         try :
             request = urllib2.Request(url)
+            request.add_header('X-API-Client-Auth', self.getMac())
+            request.add_header('Accept', 'application/json')
+
             if updated :
                 self.curseur.execute('SELECT MAX(updated) FROM scheduling')
                 last_scheduling_updated = self.curseur.fetchone()
                 lsu = float(0)
+
                 if last_scheduling_updated != None and last_scheduling_updated[0] != None :
                     lsu = last_scheduling_updated[0]
+
                 request.add_header('If-Modified-Since', datetime.datetime.fromtimestamp(lsu).strftime("%d %b %Y %H:%M:%S GMT"))
-                request.add_header('X-API-Client-Auth', self.getMac())
-            response = urllib2.urlopen(request)
+
+            response = urllib2.urlopen(request, timeout=10)
             return json.load(response)
         except urllib2.HTTPError as e:
             if e.getcode() == 404 :
-                print "ALREADY UP TO DATE"
+                print ("ALREADY UP TO DATE")
             elif e.getcode() == 401 :
-                print "You're not authorized"
+                print ("You're not authorized")
             else :
                 print ("ERREUR ")+str(e.getcode())
             return None
@@ -60,7 +65,6 @@ class Synchronisation(object):
         url = self.API_ADRESS+"schedulings?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
 
-        print ("") + schedulings
         return schedulings
 
     def requestUsers(self) :
@@ -87,7 +91,6 @@ class Synchronisation(object):
             url = self.API_ADRESS+"users?id="+",".join(professor_ids)
             users2 = self.sendRequest(url)
 
-        print ("") + users1 + users2
         return users1 + users2
 
     def findAllSchedulingsId(self) :
@@ -121,17 +124,16 @@ class Synchronisation(object):
 
         if len(presences_array) != 0 :
             presences_json = jsonpickle.encode(presences_array)
-            print ("") + presences_json
 
             try:
                 url = self.API_ADRESS+"presences/"
                 request = urllib2.Request(url,presences_json,{"content-type" : "application/json"})
                 request.add_header('X-API-Client-Auth', self.getMac())
+                request.add_header('Accept', 'application/json')
                 response = urllib2.urlopen(request)
                 self.curseur.execute('UPDATE presence SET uploaded = 1 WHERE uploaded = 0')
                 self.connexion.commit()
-                print ("") + response.read()
-                print ("") + "Sent presence...OK"
+                print ("Sent presence...OK")
 
             except urllib2.HTTPError as e:
                 print ("ERREUR...")+str(e.getcode())

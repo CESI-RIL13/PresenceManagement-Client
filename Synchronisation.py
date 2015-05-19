@@ -2,7 +2,7 @@
 # -*-  coding: utf-8 -*-
 __author__ = 'ovnislash'
 
-import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time, uuid, ConfigParser
+import urllib, urllib2, json, jsonpickle, sqlite3, datetime, time, uuid, ConfigParser, calendar
 
 class Synchronisation(object):
     def __init__(self):
@@ -10,8 +10,8 @@ class Synchronisation(object):
         cfg.read('conf.ini')
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
-        #self.API_ADRESS = 'http://'+ cfg.get('Server','hostIP') + ':' + cfg.get('Server', 'port') + '/'
-        self.API_ADRESS = "http://localhost:5000/"
+        self.API_ADRESS = 'http://'+ cfg.get('Server','hostIP') + ':' + cfg.get('Server', 'port') + '/'
+        #self.API_ADRESS = "http://localhost:5000/"
         self.DELAY =  900
 
         # Initialisation de la BDD
@@ -34,6 +34,7 @@ class Synchronisation(object):
 
     def sendRequest(self,url,updated = False):
         try :
+	    #print url
             request = urllib2.Request(url)
             request.add_header('X-API-Client-Auth', self.getMac())
             request.add_header('Accept', 'application/json')
@@ -67,7 +68,7 @@ class Synchronisation(object):
 
         url = self.API_ADRESS+"schedulings/?raspberry_id="+mac
         schedulings = self.sendRequest(url,True)
-
+	#print schedulings
         return schedulings
 
     def requestUsers(self) :
@@ -147,14 +148,16 @@ class Synchronisation(object):
         self.connexion = sqlite3.connect('DB.sqlite3')
         self.curseur = self.connexion.cursor()
         print ("User authentification's starting...")
-
-        now = time.time()
+	
+        now = datetime.datetime.now()
+	now = calendar.timegm(now.timetuple())
 
         # On vérifie le planning du créneau horraire et si l'utilisateur est dans cette promotion (tenter un join)
         self.curseur.execute("SELECT s.date_start, s.date_end FROM scheduling AS s INNER JOIN user AS u ON u.id = '"+id+"' AND ( u.promotion_id = s.promotion_id OR u.id = s.professor_id ) WHERE s.date_start < "+str(now)+" AND s.date_end > "+str(now))
         scheduling = self.curseur.fetchone()
-
+	
         if (scheduling != None) :
+	    #print str(scheduling[0])
             print ("User found...")
             # On recherche si l'utilisateur a déjà enregistré sa présence
             self.curseur.execute("SELECT user_id FROM presence WHERE user_id='"+id+"' AND date BETWEEN '"+str(scheduling[0])+"' AND '"+str(scheduling[1])+"'")

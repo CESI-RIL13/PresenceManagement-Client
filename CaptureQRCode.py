@@ -2,7 +2,7 @@
 import zbar
 import time
 import wiringpi2 as wpi
-import Image
+from PIL import Image
 import Synchronisation
 import gc
 import picamera
